@@ -1,0 +1,52 @@
+name: Release ResourcePack
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  release:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version from PR title
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TITLE="$(echo "${{ github.event.pull_request.title }}" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          VERSION="${TITLE#v}"
+
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Update pack.mcmeta version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sed -i -E "s/v[0-9]+\.[0-9]+\.[0-9]+/v${VERSION}/" pack.mcmeta
+
+      - name: Create zip archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ZIP_NAME="resourcepack-${VERSION}.zip"
+          echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
+
+          zip -r "$ZIP_NAME" assets pack.mcmeta pack.png
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ env.VERSION }}"
+          target_commitish: "${{ github.event.pull_request.merge_commit_sha }}"
+          files: ${{ env.ZIP_NAME }}
