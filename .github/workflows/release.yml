@@ -40,11 +40,6 @@ jobs:
         run: |
           set -euo pipefail
           sed -i -E "s/v[0-9]+\.[0-9]+\.[0-9]+/v${VERSION}/" pack.mcmeta
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pack.mcmeta
-          git commit -m "chore: bump version to v${VERSION}"
-          git push
 
       - name: Create zip archive
         shell: bash
