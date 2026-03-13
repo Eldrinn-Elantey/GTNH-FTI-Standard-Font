@@ -15,15 +15,21 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Get version from PR title
         shell: bash
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           set -euo pipefail
 
-          TITLE="$(echo "${{ github.event.pull_request.title }}" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          TITLE="$(echo "$PR_TITLE" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
           VERSION="${TITLE#v}"
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            exit 1
+          fi
 
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
@@ -47,5 +53,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ env.VERSION }}"
+          name: "v${{ env.VERSION }}"
           target_commitish: "${{ github.event.pull_request.merge_commit_sha }}"
           files: ${{ env.ZIP_NAME }}
