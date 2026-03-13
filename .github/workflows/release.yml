@@ -44,7 +44,7 @@ jobs:
           zip -r "$ZIP_NAME" assets pack.mcmeta pack.png
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ env.VERSION }}"
           target_commitish: "${{ github.event.pull_request.merge_commit_sha }}"
