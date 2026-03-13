@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Get version from PR title
         shell: bash
@@ -31,7 +31,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           sed -i -E "s/v[0-9]+\.[0-9]+\.[0-9]+/v${VERSION}/" pack.mcmeta
 
       - name: Create zip archive
@@ -45,7 +44,7 @@ jobs:
           zip -r "$ZIP_NAME" assets pack.mcmeta pack.png
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: "v${{ env.VERSION }}"
           target_commitish: "${{ github.event.pull_request.merge_commit_sha }}"
