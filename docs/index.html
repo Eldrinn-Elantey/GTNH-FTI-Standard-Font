@@ -121,6 +121,7 @@
           <div id="bound-right"></div>
         </div>
       </div>
+      <button class="btn" id="btn-edit-pixels" disabled onclick="openPixelEditor()" style="width:100%">✏ Edit Pixels</button>
       <div class="slider-row">
         <div class="slider-label">
           <span style="color:#e94560">Left bound</span>
@@ -328,6 +329,8 @@
       document.getElementById('slider-right').disabled = false;
       document.getElementById('btn-reset').disabled  = false;
       document.getElementById('btn-apply').disabled  = false;
+      const hasCanvas = state.pageCanvases.has(state.selectedCP >> 8);
+      document.getElementById('btn-edit-pixels').disabled = !hasCanvas;
     }
 
     function getCharDisplay(cp) {
@@ -345,6 +348,7 @@
       document.getElementById('slider-right').disabled = true;
       document.getElementById('btn-reset').disabled  = true;
       document.getElementById('btn-apply').disabled  = true;
+      document.getElementById('btn-edit-pixels').disabled = true;
       const previewCtx = document.getElementById('preview-canvas').getContext('2d');
       previewCtx.clearRect(0, 0, 128, 128);
       document.getElementById('bound-left').style.left  = '-9999px';
