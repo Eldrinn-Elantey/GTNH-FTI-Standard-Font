@@ -534,6 +534,7 @@
 
       // Write scratch back into the full page canvas
       const oc = state.pageCanvases.get(pageIndex);
+      if (!oc) return;
       const octx = oc.getContext('2d');
       octx.clearRect(glyphX, glyphY, 16, 16);
       octx.drawImage(scratch, 0, 0, 16, 16, glyphX, glyphY, 16, 16);
@@ -600,7 +601,7 @@
       <div class="modal-title" id="pixel-modal-title">Edit Pixels — U+????</div>
       <canvas id="pixel-editor-canvas" width="384" height="384"></canvas>
       <div class="modal-actions">
-        <button class="btn btn-primary" onclick="savePixelEdits()">✓ Save</button>
+        <button class="btn btn-primary" onclick="savePixelEdits().catch(console.error)">✓ Save</button>
         <button class="btn" onclick="closePixelEditor()">Cancel</button>
       </div>
     </div>
