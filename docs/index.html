@@ -153,6 +153,35 @@
     <span id="status-changes" class="highlight">No changes</span>
   </div>
 
+  <!-- Pixel editor modal -->
+  <div id="modal-pixel-editor" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-title" id="pixel-modal-title">Edit Pixels — U+????</div>
+      <canvas id="pixel-editor-canvas" width="384" height="384"></canvas>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="savePixelEdits().catch(console.error)">✓ Save</button>
+        <button class="btn" onclick="closePixelEditor()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save / diff modal -->
+  <div id="modal-save" class="modal-backdrop hidden">
+    <div class="modal-box" style="min-width:320px">
+      <div class="modal-title">Save — Review Changes</div>
+      <div>
+        <div class="modal-section-label">Glyph size changes</div>
+        <div id="diff-size-list" style="font-size:11px;line-height:1.8;color:#ccc;max-height:200px;overflow-y:auto"></div>
+      </div>
+      <div>
+        <div class="modal-section-label">Modified PNG pages</div>
+        <div id="diff-png-list" style="font-size:11px;line-height:1.8;color:#ccc"></div>
+      </div>
+      <div class="modal-actions" id="save-modal-actions"></div>
+      <button class="btn" onclick="closeSaveModal()" style="align-self:flex-start">Close</button>
+    </div>
+  </div>
+
   <script>
     // ── App state ────────────────────────────────────────────────
     const state = {
@@ -698,34 +727,5 @@
 
     document.addEventListener('mouseup', () => { pixelEditor.painting = false; });
   </script>
-
-  <!-- Pixel editor modal -->
-  <div id="modal-pixel-editor" class="modal-backdrop hidden">
-    <div class="modal-box">
-      <div class="modal-title" id="pixel-modal-title">Edit Pixels — U+????</div>
-      <canvas id="pixel-editor-canvas" width="384" height="384"></canvas>
-      <div class="modal-actions">
-        <button class="btn btn-primary" onclick="savePixelEdits().catch(console.error)">✓ Save</button>
-        <button class="btn" onclick="closePixelEditor()">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Save / diff modal -->
-  <div id="modal-save" class="modal-backdrop hidden">
-    <div class="modal-box" style="min-width:320px">
-      <div class="modal-title">Save — Review Changes</div>
-      <div>
-        <div class="modal-section-label">Glyph size changes</div>
-        <div id="diff-size-list" style="font-size:11px;line-height:1.8;color:#ccc;max-height:200px;overflow-y:auto"></div>
-      </div>
-      <div>
-        <div class="modal-section-label">Modified PNG pages</div>
-        <div id="diff-png-list" style="font-size:11px;line-height:1.8;color:#ccc"></div>
-      </div>
-      <div class="modal-actions" id="save-modal-actions"></div>
-      <button class="btn" onclick="closeSaveModal()" style="align-self:flex-start">Close</button>
-    </div>
-  </div>
 </body>
 </html>
