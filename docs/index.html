@@ -349,13 +349,13 @@
     function updateByteInfo(left, right) {
       const byte = encodeGlyphByte(left, right);
       document.getElementById('info-byte').textContent  = '0x' + byte.toString(16).toUpperCase().padStart(2, '0');
-      document.getElementById('info-width').textContent = Math.max(0, right - left) + 'px';
+      document.getElementById('info-width').textContent = Math.max(0, right - left + 1) + 'px';
     }
 
     function updateBoundLines(left, right) {
       const px = PREVIEW_SCALE; // pixels per source pixel
       document.getElementById('bound-left').style.left  = (left  * px) + 'px';
-      document.getElementById('bound-right').style.left = (right * px) + 'px';
+      document.getElementById('bound-right').style.left = ((right + 1) * px) + 'px';
     }
 
     function renderPreview(cp, left, right) {
