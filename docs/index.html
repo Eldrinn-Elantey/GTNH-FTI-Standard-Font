@@ -546,6 +546,16 @@
 
     // ── Keyboard navigation (arrow keys to move between glyphs) ───
     document.addEventListener('keydown', (e) => {
+      // Handle Escape to close modals
+      if (e.key === 'Escape') {
+        if (!document.getElementById('modal-pixel-editor').classList.contains('hidden')) {
+          closePixelEditor(); return;
+        }
+        if (!document.getElementById('modal-save').classList.contains('hidden')) {
+          closeSaveModal(); return;
+        }
+      }
+
       if (state.selectedCP === null || state.activePage === null) return;
       let delta = 0;
       if (e.key === 'ArrowRight') delta = 1;
@@ -559,6 +569,15 @@
       if (newPage !== state.activePage) return; // don't cross page boundaries with arrows
       if (newCP < 0 || newCP > 65535) return;
       selectGlyph(newCP);
+    });
+
+    // ── Modal backdrop-click handlers ─────────────────────────────
+    document.getElementById('modal-pixel-editor').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closePixelEditor();
+    });
+
+    document.getElementById('modal-save').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeSaveModal();
     });
 
     // ── Pixel editor functions ────────────────────────────────────
