@@ -465,18 +465,25 @@
               '  —  ' + origW + ' → ' + currW + ' px');
           }
         }
-        sizeList.innerHTML = diffs.length
-          ? diffs.map(d => '<div>' + d + '</div>').join('')
-          : '<span style="color:#555">No size changes</span>';
+        if (diffs.length === 0) {
+          sizeList.innerHTML = '<span style="color:#555">No size changes</span>';
+        } else {
+          sizeList.innerHTML = '';
+          diffs.forEach(d => {
+            const div = document.createElement('div');
+            div.textContent = d;
+            sizeList.appendChild(div);
+          });
+        }
       }
 
       // Populate modified PNG list
       const pngList = document.getElementById('diff-png-list');
+      const sortedPages = [...state.modifiedPages].sort((a, b) => a - b);
       if (state.modifiedPages.size === 0) {
         pngList.innerHTML = '<span style="color:#555">No pixel changes</span>';
       } else {
-        pngList.innerHTML = [...state.modifiedPages]
-          .sort((a, b) => a - b)
+        pngList.innerHTML = sortedPages
           .map(idx => {
             const name = 'unicode_page_' + idx.toString(16).toUpperCase().padStart(2, '0') + '.png';
             return '<div style="color:#00b4d8">' + name + ' <span style="color:#555">[modified]</span></div>';
@@ -493,7 +500,7 @@
       btnBin.onclick = downloadBin;
       actions.appendChild(btnBin);
 
-      [...state.modifiedPages].sort((a, b) => a - b).forEach(idx => {
+      sortedPages.forEach(idx => {
         const hex = idx.toString(16).toUpperCase().padStart(2, '0');
         const btn = document.createElement('button');
         btn.className = 'btn';
