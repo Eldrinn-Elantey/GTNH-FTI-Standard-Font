@@ -178,7 +178,7 @@
       const files = Array.from(e.target.files);
       for (const file of files) {
         const match = file.name.match(/unicode_page_([0-9a-fA-F]{2})\.png$/i);
-        if (!match) { console.warn('Skipping unrecognized file:', file.name); continue; }
+        if (!match) { alert('Skipped "' + file.name + '": expected filename like unicode_page_04.png'); continue; }
         const pageIndex = parseInt(match[1], 16);
         const bitmap = await createImageBitmap(file);
         state.pages.set(pageIndex, bitmap);
@@ -425,8 +425,10 @@
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = 'glyph_sizes.bin';
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(a.href);
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(a.href), 100);
     }
 
     // ── Keyboard navigation (arrow keys to move between glyphs) ───
