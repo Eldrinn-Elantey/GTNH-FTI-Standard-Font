@@ -166,6 +166,16 @@
       modifiedCount: 0,
     };
 
+    // ── Pixel editor state ────────────────────────────────────────
+    const pixelEditor = {
+      scratch: null,  // OffscreenCanvas 16x16 with current edit
+      pageIndex: null,
+      glyphX: null,
+      glyphY: null,
+      painting: false,
+      lastValue: null, // true = drawing white, false = erasing
+    };
+
     // ── File loading ──────────────────────────────────────────────
     document.getElementById('input-bin').addEventListener('change', async (e) => {
       const file = e.target.files[0];
@@ -465,6 +475,58 @@
       if (newCP < 0 || newCP > 65535) return;
       selectGlyph(newCP);
     });
+
+    // ── Pixel editor functions ────────────────────────────────────
+    function openPixelEditor() {
+      if (state.selectedCP === null) return;
+      const pageIndex = state.selectedCP >> 8;
+      const oc = state.pageCanvases.get(pageIndex);
+      if (!oc) return;
+
+      const { x, y } = getGlyphCellCoords(state.selectedCP);
+      pixelEditor.pageIndex = pageIndex;
+      pixelEditor.glyphX = x;
+      pixelEditor.glyphY = y;
+
+      // Copy glyph pixels into scratch canvas
+      pixelEditor.scratch = new OffscreenCanvas(16, 16);
+      pixelEditor.scratch.getContext('2d').drawImage(oc, x, y, 16, 16, 0, 0, 16, 16);
+
+      document.getElementById('pixel-modal-title').textContent =
+        'Edit Pixels — U+' + state.selectedCP.toString(16).toUpperCase().padStart(4, '0');
+      document.getElementById('modal-pixel-editor').classList.remove('hidden');
+      renderPixelEditorCanvas();
+    }
+
+    function renderPixelEditorCanvas() {
+      const canvas = document.getElementById('pixel-editor-canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      // Checkerboard background to show transparency
+      ctx.fillStyle = '#2a2a3e';
+      ctx.fillRect(0, 0, 384, 384);
+      ctx.fillStyle = '#222233';
+      for (let r = 0; r < 16; r++) {
+        for (let c = 0; c < 16; c++) {
+          if ((r + c) % 2 === 0) ctx.fillRect(c * 24, r * 24, 24, 24);
+        }
+      }
+      // Draw glyph pixels
+      ctx.drawImage(pixelEditor.scratch, 0, 0, 16, 16, 0, 0, 384, 384);
+      // Grid lines
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 16; i++) {
+        const p = i * 24;
+        ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, 384); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(384, p); ctx.stroke();
+      }
+    }
+
+    function closePixelEditor() {
+      document.getElementById('modal-pixel-editor').classList.add('hidden');
+      pixelEditor.scratch = null;
+    }
   </script>
 
   <!-- Pixel editor modal -->
