@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Glyph Utils Tests</title>
+  <script src="glyph-utils.js"></script>
+</head>
+<body>
+<pre id="out"></pre>
+<script>
+  let passed = 0, failed = 0;
+  function assert(desc, actual, expected) {
+    const ok = JSON.stringify(actual) === JSON.stringify(expected);
+    document.getElementById('out').textContent +=
+      (ok ? '✓' : '✗') + ' ' + desc +
+      (ok ? '' : '\n  expected: ' + JSON.stringify(expected) + '\n  got:      ' + JSON.stringify(actual)) + '\n';
+    ok ? passed++ : failed++;
+  }
+
+  // parseGlyphByte
+  assert('parseGlyphByte(0x00)', parseGlyphByte(0x00), { left: 0, right: 0 });
+  assert('parseGlyphByte(0xFF)', parseGlyphByte(0xFF), { left: 15, right: 15 });
+  assert('parseGlyphByte(0x3A)', parseGlyphByte(0x3A), { left: 3, right: 10 });
+  assert('parseGlyphByte(0xB4)', parseGlyphByte(0xB4), { left: 11, right: 4 });
+
+  // encodeGlyphByte
+  assert('encodeGlyphByte(0, 0)', encodeGlyphByte(0, 0), 0x00);
+  assert('encodeGlyphByte(15, 15)', encodeGlyphByte(15, 15), 0xFF);
+  assert('encodeGlyphByte(3, 10)', encodeGlyphByte(3, 10), 0x3A);
+  assert('encodeGlyphByte(11, 4)', encodeGlyphByte(11, 4), 0xB4);
+
+  // round-trip
+  assert('round-trip 0x28', encodeGlyphByte(parseGlyphByte(0x28).left, parseGlyphByte(0x28).right), 0x28);
+
+  // getGlyphCellCoords
+  assert('U+0000 → col 0 row 0', getGlyphCellCoords(0x0000), { x: 0,   y: 0,   w: 16, h: 16 });
+  assert('U+000F → col 15 row 0', getGlyphCellCoords(0x000F), { x: 240, y: 0,   w: 16, h: 16 });
+  assert('U+0041 (A) → col 1 row 4', getGlyphCellCoords(0x0041), { x: 16,  y: 64,  w: 16, h: 16 });
+  assert('U+00FF → col 15 row 15', getGlyphCellCoords(0x00FF), { x: 240, y: 240, w: 16, h: 16 });
+  assert('U+0410 (А) same coords as U+0010', getGlyphCellCoords(0x0410), getGlyphCellCoords(0x0010));
+
+  document.getElementById('out').textContent += '\n' + passed + ' passed, ' + failed + ' failed';
+</script>
+</body>
+</html>
