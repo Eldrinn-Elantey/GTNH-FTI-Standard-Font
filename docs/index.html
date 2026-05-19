@@ -415,6 +415,34 @@
       setSliders(left, right);
       renderPreview(state.selectedCP, left, right);
     }
+
+    // ── Download ──────────────────────────────────────────────────
+    function downloadBin() {
+      if (!state.workingData) return;
+      const blob = new Blob([state.workingData], { type: 'application/octet-stream' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'glyph_sizes.bin';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    // ── Keyboard navigation (arrow keys to move between glyphs) ───
+    document.addEventListener('keydown', (e) => {
+      if (state.selectedCP === null || state.activePage === null) return;
+      let delta = 0;
+      if (e.key === 'ArrowRight') delta = 1;
+      if (e.key === 'ArrowLeft')  delta = -1;
+      if (e.key === 'ArrowDown')  delta = 16;
+      if (e.key === 'ArrowUp')    delta = -16;
+      if (delta === 0) return;
+      e.preventDefault();
+      const newCP = state.selectedCP + delta;
+      const newPage = newCP >> 8;
+      if (newPage !== state.activePage) return; // don't cross page boundaries with arrows
+      if (newCP < 0 || newCP > 65535) return;
+      selectGlyph(newCP);
+    });
   </script>
 </body>
 </html>
