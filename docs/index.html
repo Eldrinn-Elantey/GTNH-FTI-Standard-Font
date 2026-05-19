@@ -654,6 +654,15 @@
         ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, 384); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(384, p); ctx.stroke();
       }
+      // Glyph width bounds
+      if (state.selectedCP !== null && state.workingData) {
+        const { left, right } = parseGlyphByte(state.workingData[state.selectedCP]);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#e94560';
+        ctx.beginPath(); ctx.moveTo(left * 24, 0); ctx.lineTo(left * 24, 384); ctx.stroke();
+        ctx.strokeStyle = '#00b4d8';
+        ctx.beginPath(); ctx.moveTo((right + 1) * 24, 0); ctx.lineTo((right + 1) * 24, 384); ctx.stroke();
+      }
     }
 
     function closePixelEditor() {
