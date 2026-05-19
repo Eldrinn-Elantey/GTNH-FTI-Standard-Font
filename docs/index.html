@@ -146,11 +146,13 @@
   <script>
     // ── App state ────────────────────────────────────────────────
     const state = {
-      originalData: null,   // Uint8Array 65536 bytes, immutable copy
-      workingData:  null,   // Uint8Array 65536 bytes, live edits
-      pages:        new Map(), // Map<pageIndex, ImageBitmap>
-      activePage:   null,
-      selectedCP:   null,   // currently selected codepoint
+      originalData:  null,   // Uint8Array 65536 bytes, immutable copy
+      workingData:   null,   // Uint8Array 65536 bytes, live edits
+      pages:         new Map(), // Map<pageIndex, ImageBitmap>
+      pageCanvases:  new Map(), // Map<pageIndex, OffscreenCanvas(256, 256)>
+      modifiedPages: new Set(), // Set<pageIndex> of pages with pixel edits
+      activePage:    null,
+      selectedCP:    null,   // currently selected codepoint
       modifiedCount: 0,
     };
 
@@ -182,6 +184,9 @@
         const pageIndex = parseInt(match[1], 16);
         const bitmap = await createImageBitmap(file);
         state.pages.set(pageIndex, bitmap);
+        const oc = new OffscreenCanvas(256, 256);
+        oc.getContext('2d').drawImage(bitmap, 0, 0);
+        state.pageCanvases.set(pageIndex, oc);
       }
       refreshPageTabs();
       // auto-select first loaded page if none active
