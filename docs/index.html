@@ -528,6 +528,30 @@
       pixelEditor.scratch = null;
     }
 
+    async function savePixelEdits() {
+      const { pageIndex, glyphX, glyphY, scratch } = pixelEditor;
+      if (!scratch) return;
+
+      // Write scratch back into the full page canvas
+      const oc = state.pageCanvases.get(pageIndex);
+      const octx = oc.getContext('2d');
+      octx.clearRect(glyphX, glyphY, 16, 16);
+      octx.drawImage(scratch, 0, 0, 16, 16, glyphX, glyphY, 16, 16);
+
+      state.modifiedPages.add(pageIndex);
+
+      // Regenerate ImageBitmap so grid and preview reflect changes
+      const newBitmap = await createImageBitmap(oc);
+      state.pages.set(pageIndex, newBitmap);
+
+      closePixelEditor();
+      renderGrid(pageIndex);
+      if (state.selectedCP !== null) {
+        const { left, right } = parseGlyphByte(state.workingData[state.selectedCP]);
+        renderPreview(state.selectedCP, left, right);
+      }
+    }
+
     function getPixelEditorCell(e) {
       const canvas = document.getElementById('pixel-editor-canvas');
       const rect = canvas.getBoundingClientRect();
