@@ -142,7 +142,61 @@
   </div>
 
   <script>
-    console.log('app ready');
+    // ── App state ────────────────────────────────────────────────
+    const state = {
+      originalData: null,   // Uint8Array 65536 bytes, immutable copy
+      workingData:  null,   // Uint8Array 65536 bytes, live edits
+      pages:        new Map(), // Map<pageIndex, ImageBitmap>
+      activePage:   null,
+      selectedCP:   null,   // currently selected codepoint
+      modifiedCount: 0,
+    };
+
+    // ── File loading ──────────────────────────────────────────────
+    document.getElementById('input-bin').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const buffer = await file.arrayBuffer();
+      if (buffer.byteLength !== 65536) {
+        alert('Invalid file: glyph_sizes.bin must be exactly 65536 bytes.');
+        return;
+      }
+      state.originalData = new Uint8Array(buffer);
+      state.workingData  = new Uint8Array(buffer.slice(0));
+      state.modifiedCount = 0;
+      document.getElementById('btn-download').disabled = false;
+      document.getElementById('status-bin').textContent = 'Loaded: ' + file.name;
+      updateStatusChanges();
+      refreshPageTabs();
+      if (state.activePage !== null) renderGrid(state.activePage);
+      e.target.value = '';
+    });
+
+    document.getElementById('input-png').addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files);
+      for (const file of files) {
+        const match = file.name.match(/unicode_page_([0-9a-fA-F]{2})\.png$/i);
+        if (!match) { console.warn('Skipping unrecognized file:', file.name); continue; }
+        const pageIndex = parseInt(match[1], 16);
+        const bitmap = await createImageBitmap(file);
+        state.pages.set(pageIndex, bitmap);
+      }
+      refreshPageTabs();
+      // auto-select first loaded page if none active
+      if (state.activePage === null && state.pages.size > 0) {
+        selectPage([...state.pages.keys()].sort((a, b) => a - b)[0]);
+      } else if (state.activePage !== null) {
+        renderGrid(state.activePage);
+      }
+      e.target.value = '';
+    });
+
+    function updateStatusChanges() {
+      const el = document.getElementById('status-changes');
+      el.textContent = state.modifiedCount === 0
+        ? 'No changes'
+        : 'Modified: ' + state.modifiedCount + ' glyph' + (state.modifiedCount === 1 ? '' : 's');
+    }
   </script>
 </body>
 </html>
