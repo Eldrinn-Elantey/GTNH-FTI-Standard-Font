@@ -68,6 +68,15 @@
     #status-bar .highlight { color: #00b4d8; }
 
     #no-file-msg { color: #555; margin: auto; text-align: center; line-height: 2; }
+
+    /* Modals */
+    .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.75); display:flex; align-items:center; justify-content:center; z-index:100; }
+    .modal-backdrop.hidden { display:none; }
+    .modal-box { background:#16213e; border:1px solid #333; border-radius:6px; padding:16px; display:flex; flex-direction:column; gap:12px; max-height:90vh; max-width:440px; overflow-y:auto; }
+    .modal-title { font-size:13px; color:#fff; font-weight:bold; }
+    .modal-section-label { font-size:10px; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+    .modal-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    #pixel-editor-canvas { image-rendering:pixelated; cursor:crosshair; border:1px solid #444; display:block; }
   </style>
 </head>
 <body>
@@ -79,7 +88,7 @@
     <input type="file" id="input-bin" accept=".bin">
     <button class="btn" onclick="document.getElementById('input-png').click()">🖼 Load PNG pages</button>
     <input type="file" id="input-png" accept=".png" multiple>
-    <button class="btn btn-primary" id="btn-download" disabled onclick="downloadBin()">💾 Download .bin</button>
+    <button class="btn btn-primary" id="btn-download" disabled onclick="openSaveModal()">💾 Save</button>
   </div>
 
   <!-- Page selector -->
@@ -112,6 +121,7 @@
           <div id="bound-right"></div>
         </div>
       </div>
+      <button class="btn" id="btn-edit-pixels" disabled onclick="openPixelEditor()" style="width:100%">✏ Edit Pixels</button>
       <div class="slider-row">
         <div class="slider-label">
           <span style="color:#e94560">Left bound</span>
@@ -143,15 +153,56 @@
     <span id="status-changes" class="highlight">No changes</span>
   </div>
 
+  <!-- Pixel editor modal -->
+  <div id="modal-pixel-editor" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-title" id="pixel-modal-title">Edit Pixels — U+????</div>
+      <canvas id="pixel-editor-canvas" width="384" height="384"></canvas>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="savePixelEdits().catch(console.error)">✓ Save</button>
+        <button class="btn" onclick="closePixelEditor()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save / diff modal -->
+  <div id="modal-save" class="modal-backdrop hidden">
+    <div class="modal-box" style="min-width:320px">
+      <div class="modal-title">Save — Review Changes</div>
+      <div>
+        <div class="modal-section-label">Glyph size changes</div>
+        <div id="diff-size-list" style="font-size:11px;line-height:1.8;color:#ccc;max-height:200px;overflow-y:auto"></div>
+      </div>
+      <div>
+        <div class="modal-section-label">Modified PNG pages</div>
+        <div id="diff-png-list" style="font-size:11px;line-height:1.8;color:#ccc"></div>
+      </div>
+      <div class="modal-actions" id="save-modal-actions"></div>
+      <button class="btn" onclick="closeSaveModal()" style="align-self:flex-start">Close</button>
+    </div>
+  </div>
+
   <script>
     // ── App state ────────────────────────────────────────────────
     const state = {
-      originalData: null,   // Uint8Array 65536 bytes, immutable copy
-      workingData:  null,   // Uint8Array 65536 bytes, live edits
-      pages:        new Map(), // Map<pageIndex, ImageBitmap>
-      activePage:   null,
-      selectedCP:   null,   // currently selected codepoint
+      originalData:  null,   // Uint8Array 65536 bytes, immutable copy
+      workingData:   null,   // Uint8Array 65536 bytes, live edits
+      pages:         new Map(), // Map<pageIndex, ImageBitmap>
+      pageCanvases:  new Map(), // Map<pageIndex, OffscreenCanvas(256, 256)>
+      modifiedPages: new Set(), // Set<pageIndex> of pages with pixel edits
+      activePage:    null,
+      selectedCP:    null,   // currently selected codepoint
       modifiedCount: 0,
+    };
+
+    // ── Pixel editor state ────────────────────────────────────────
+    const pixelEditor = {
+      scratch: null,  // OffscreenCanvas 16x16 with current edit
+      pageIndex: null,
+      glyphX: null,
+      glyphY: null,
+      painting: false,
+      lastValue: null, // true = drawing white, false = erasing
     };
 
     // ── File loading ──────────────────────────────────────────────
@@ -182,6 +233,9 @@
         const pageIndex = parseInt(match[1], 16);
         const bitmap = await createImageBitmap(file);
         state.pages.set(pageIndex, bitmap);
+        const oc = new OffscreenCanvas(256, 256);
+        oc.getContext('2d').drawImage(bitmap, 0, 0);
+        state.pageCanvases.set(pageIndex, oc);
       }
       refreshPageTabs();
       // auto-select first loaded page if none active
@@ -314,6 +368,8 @@
       document.getElementById('slider-right').disabled = false;
       document.getElementById('btn-reset').disabled  = false;
       document.getElementById('btn-apply').disabled  = false;
+      const hasCanvas = state.pageCanvases.has(state.selectedCP >> 8);
+      document.getElementById('btn-edit-pixels').disabled = !hasCanvas;
     }
 
     function getCharDisplay(cp) {
@@ -331,6 +387,7 @@
       document.getElementById('slider-right').disabled = true;
       document.getElementById('btn-reset').disabled  = true;
       document.getElementById('btn-apply').disabled  = true;
+      document.getElementById('btn-edit-pixels').disabled = true;
       const previewCtx = document.getElementById('preview-canvas').getContext('2d');
       previewCtx.clearRect(0, 0, 128, 128);
       document.getElementById('bound-left').style.left  = '-9999px';
@@ -418,6 +475,91 @@
       renderPreview(state.selectedCP, left, right);
     }
 
+    // ── Save modal ────────────────────────────────────────────────
+    function openSaveModal() {
+      // Populate size diff list
+      const sizeList = document.getElementById('diff-size-list');
+      if (!state.workingData) { sizeList.textContent = 'No file loaded.'; }
+      else {
+        const diffs = [];
+        for (let cp = 0; cp < 65536; cp++) {
+          if (state.workingData[cp] !== state.originalData[cp]) {
+            const orig = parseGlyphByte(state.originalData[cp]);
+            const curr = parseGlyphByte(state.workingData[cp]);
+            const origW = Math.max(0, orig.right - orig.left + 1);
+            const currW = Math.max(0, curr.right - curr.left + 1);
+            let label = '';
+            try { label = ' "' + String.fromCodePoint(cp) + '"'; } catch {}
+            diffs.push('U+' + cp.toString(16).toUpperCase().padStart(4, '0') + label +
+              '  —  ' + origW + ' → ' + currW + ' px');
+          }
+        }
+        if (diffs.length === 0) {
+          sizeList.innerHTML = '<span style="color:#555">No size changes</span>';
+        } else {
+          sizeList.innerHTML = '';
+          diffs.forEach(d => {
+            const div = document.createElement('div');
+            div.textContent = d;
+            sizeList.appendChild(div);
+          });
+        }
+      }
+
+      // Populate modified PNG list
+      const pngList = document.getElementById('diff-png-list');
+      const sortedPages = [...state.modifiedPages].sort((a, b) => a - b);
+      if (state.modifiedPages.size === 0) {
+        pngList.innerHTML = '<span style="color:#555">No pixel changes</span>';
+      } else {
+        pngList.innerHTML = sortedPages
+          .map(idx => {
+            const name = 'unicode_page_' + idx.toString(16).toUpperCase().padStart(2, '0') + '.png';
+            return '<div style="color:#00b4d8">' + name + ' <span style="color:#555">[modified]</span></div>';
+          }).join('');
+      }
+
+      // Build action buttons
+      const actions = document.getElementById('save-modal-actions');
+      actions.innerHTML = '';
+
+      const btnBin = document.createElement('button');
+      btnBin.className = 'btn btn-primary';
+      btnBin.textContent = '💾 Download .bin';
+      btnBin.onclick = downloadBin;
+      actions.appendChild(btnBin);
+
+      sortedPages.forEach(idx => {
+        const hex = idx.toString(16).toUpperCase().padStart(2, '0');
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = '🖼 Download PNG [' + hex + ']';
+        btn.onclick = () => downloadPng(idx);
+        actions.appendChild(btn);
+      });
+
+      document.getElementById('modal-save').classList.remove('hidden');
+    }
+
+    function closeSaveModal() {
+      document.getElementById('modal-save').classList.add('hidden');
+    }
+
+    function downloadPng(pageIndex) {
+      const oc = state.pageCanvases.get(pageIndex);
+      if (!oc) return;
+      const hex = pageIndex.toString(16).toUpperCase().padStart(2, '0');
+      oc.convertToBlob({ type: 'image/png' }).then(blob => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'unicode_page_' + hex + '.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(a.href), 100);
+      });
+    }
+
     // ── Download ──────────────────────────────────────────────────
     function downloadBin() {
       if (!state.workingData) return;
@@ -433,6 +575,16 @@
 
     // ── Keyboard navigation (arrow keys to move between glyphs) ───
     document.addEventListener('keydown', (e) => {
+      // Handle Escape to close modals
+      if (e.key === 'Escape') {
+        if (!document.getElementById('modal-pixel-editor').classList.contains('hidden')) {
+          closePixelEditor(); return;
+        }
+        if (!document.getElementById('modal-save').classList.contains('hidden')) {
+          closeSaveModal(); return;
+        }
+      }
+
       if (state.selectedCP === null || state.activePage === null) return;
       let delta = 0;
       if (e.key === 'ArrowRight') delta = 1;
@@ -447,6 +599,142 @@
       if (newCP < 0 || newCP > 65535) return;
       selectGlyph(newCP);
     });
+
+    // ── Modal backdrop-click handlers ─────────────────────────────
+    document.getElementById('modal-pixel-editor').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closePixelEditor();
+    });
+
+    document.getElementById('modal-save').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeSaveModal();
+    });
+
+    // ── Pixel editor functions ────────────────────────────────────
+    function openPixelEditor() {
+      if (state.selectedCP === null) return;
+      const pageIndex = state.selectedCP >> 8;
+      const oc = state.pageCanvases.get(pageIndex);
+      if (!oc) return;
+
+      const { x, y } = getGlyphCellCoords(state.selectedCP);
+      pixelEditor.pageIndex = pageIndex;
+      pixelEditor.glyphX = x;
+      pixelEditor.glyphY = y;
+
+      // Copy glyph pixels into scratch canvas
+      pixelEditor.scratch = new OffscreenCanvas(16, 16);
+      pixelEditor.scratch.getContext('2d').drawImage(oc, x, y, 16, 16, 0, 0, 16, 16);
+
+      document.getElementById('pixel-modal-title').textContent =
+        'Edit Pixels — U+' + state.selectedCP.toString(16).toUpperCase().padStart(4, '0');
+      document.getElementById('modal-pixel-editor').classList.remove('hidden');
+      renderPixelEditorCanvas();
+    }
+
+    function renderPixelEditorCanvas() {
+      const canvas = document.getElementById('pixel-editor-canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      // Checkerboard background to show transparency
+      ctx.fillStyle = '#2a2a3e';
+      ctx.fillRect(0, 0, 384, 384);
+      ctx.fillStyle = '#222233';
+      for (let r = 0; r < 16; r++) {
+        for (let c = 0; c < 16; c++) {
+          if ((r + c) % 2 === 0) ctx.fillRect(c * 24, r * 24, 24, 24);
+        }
+      }
+      // Draw glyph pixels
+      ctx.drawImage(pixelEditor.scratch, 0, 0, 16, 16, 0, 0, 384, 384);
+      // Grid lines
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 16; i++) {
+        const p = i * 24;
+        ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, 384); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(384, p); ctx.stroke();
+      }
+      // Glyph width bounds
+      if (state.selectedCP !== null && state.workingData) {
+        const { left, right } = parseGlyphByte(state.workingData[state.selectedCP]);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#e94560';
+        ctx.beginPath(); ctx.moveTo(left * 24, 0); ctx.lineTo(left * 24, 384); ctx.stroke();
+        ctx.strokeStyle = '#00b4d8';
+        ctx.beginPath(); ctx.moveTo((right + 1) * 24, 0); ctx.lineTo((right + 1) * 24, 384); ctx.stroke();
+      }
+    }
+
+    function closePixelEditor() {
+      document.getElementById('modal-pixel-editor').classList.add('hidden');
+      pixelEditor.scratch = null;
+    }
+
+    async function savePixelEdits() {
+      const { pageIndex, glyphX, glyphY, scratch } = pixelEditor;
+      if (!scratch) return;
+
+      // Write scratch back into the full page canvas
+      const oc = state.pageCanvases.get(pageIndex);
+      if (!oc) return;
+      const octx = oc.getContext('2d');
+      octx.clearRect(glyphX, glyphY, 16, 16);
+      octx.drawImage(scratch, 0, 0, 16, 16, glyphX, glyphY, 16, 16);
+
+      state.modifiedPages.add(pageIndex);
+
+      // Regenerate ImageBitmap so grid and preview reflect changes
+      const newBitmap = await createImageBitmap(oc);
+      state.pages.set(pageIndex, newBitmap);
+
+      closePixelEditor();
+      renderGrid(pageIndex);
+      if (state.selectedCP !== null) {
+        const { left, right } = parseGlyphByte(state.workingData[state.selectedCP]);
+        renderPreview(state.selectedCP, left, right);
+      }
+    }
+
+    function getPixelEditorCell(e) {
+      const canvas = document.getElementById('pixel-editor-canvas');
+      const rect = canvas.getBoundingClientRect();
+      const col = Math.floor((e.clientX - rect.left) / 24);
+      const row = Math.floor((e.clientY - rect.top)  / 24);
+      if (col < 0 || col > 15 || row < 0 || row > 15) return null;
+      return { col, row };
+    }
+
+    function paintPixel(col, row) {
+      const ctx = pixelEditor.scratch.getContext('2d');
+      if (pixelEditor.lastValue) {
+        ctx.clearRect(col, row, 1, 1);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(col, row, 1, 1);
+      } else {
+        ctx.clearRect(col, row, 1, 1);
+      }
+      renderPixelEditorCanvas();
+    }
+
+    document.getElementById('pixel-editor-canvas').addEventListener('mousedown', (e) => {
+      if (!pixelEditor.scratch) return;
+      const cell = getPixelEditorCell(e);
+      if (!cell) return;
+      // Determine draw vs erase from the current pixel alpha
+      const px = pixelEditor.scratch.getContext('2d').getImageData(cell.col, cell.row, 1, 1).data;
+      pixelEditor.lastValue = px[3] < 128; // transparent → draw white; white → erase
+      pixelEditor.painting = true;
+      paintPixel(cell.col, cell.row);
+      e.preventDefault();
+    });
+
+    document.getElementById('pixel-editor-canvas').addEventListener('mousemove', (e) => {
+      if (!pixelEditor.painting || !pixelEditor.scratch) return;
+      const cell = getPixelEditorCell(e);
+      if (cell) paintPixel(cell.col, cell.row);
+    });
+
+    document.addEventListener('mouseup', () => { pixelEditor.painting = false; });
   </script>
 </body>
 </html>
