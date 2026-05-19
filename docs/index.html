@@ -197,6 +197,100 @@
         ? 'No changes'
         : 'Modified: ' + state.modifiedCount + ' glyph' + (state.modifiedCount === 1 ? '' : 's');
     }
+
+    // ── Page tabs ─────────────────────────────────────────────────
+    function refreshPageTabs() {
+      const bar = document.getElementById('page-tabs');
+      bar.innerHTML = '';
+      const sorted = [...state.pages.keys()].sort((a, b) => a - b);
+      sorted.forEach(idx => {
+        const tab = document.createElement('div');
+        tab.className = 'page-tab' + (idx === state.activePage ? ' active' : '');
+        tab.textContent = idx.toString(16).toUpperCase().padStart(2, '0');
+        tab.title = 'U+' + (idx * 256).toString(16).toUpperCase().padStart(4, '0') +
+                    '–U+' + (idx * 256 + 255).toString(16).toUpperCase().padStart(4, '0');
+        tab.onclick = () => selectPage(idx);
+        bar.appendChild(tab);
+      });
+    }
+
+    function selectPage(pageIndex) {
+      state.activePage = pageIndex;
+      state.selectedCP = null;
+      refreshPageTabs();
+      renderGrid(pageIndex);
+      clearEditor();
+      const base = pageIndex * 256;
+      document.getElementById('grid-title').textContent =
+        'Page ' + pageIndex.toString(16).toUpperCase().padStart(2, '0') +
+        ' · U+' + base.toString(16).toUpperCase().padStart(4, '0') +
+        '–U+' + (base + 255).toString(16).toUpperCase().padStart(4, '0');
+      document.getElementById('status-page').textContent =
+        'Page ' + pageIndex.toString(16).toUpperCase().padStart(2, '0') +
+        ': unicode_page_' + pageIndex.toString(16).toUpperCase().padStart(2, '0') + '.png';
+    }
+
+    // ── Grid rendering ────────────────────────────────────────────
+    const CELL = 16;   // px per glyph in source PNG
+    const SCALE = 2;   // display scale factor for grid (256×256 → 512×512)
+
+    function renderGrid(pageIndex) {
+      const bitmap = state.pages.get(pageIndex);
+      const canvas  = document.getElementById('grid-canvas');
+      const overlay = document.getElementById('grid-overlay');
+      const size = 256 * SCALE;
+
+      canvas.width  = size; canvas.height  = size;
+      overlay.width = size; overlay.height = size;
+      canvas.style.width  = size + 'px'; canvas.style.height  = size + 'px';
+      overlay.style.width = size + 'px'; overlay.style.height = size + 'px';
+
+      document.getElementById('no-file-msg').style.display = 'none';
+      document.getElementById('grid-wrap').style.display   = 'inline-block';
+
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(bitmap, 0, 0, size, size);
+      renderGridOverlay(pageIndex);
+    }
+
+    function renderGridOverlay(pageIndex) {
+      const overlay = document.getElementById('grid-overlay');
+      const ctx = overlay.getContext('2d');
+      const size = 256 * SCALE;
+      ctx.clearRect(0, 0, size, size);
+
+      // draw grid lines
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 16; i++) {
+        const p = i * CELL * SCALE;
+        ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, size); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(size, p); ctx.stroke();
+      }
+
+      // highlight selected glyph
+      if (state.selectedCP !== null && (state.selectedCP >> 8) === pageIndex) {
+        const { x, y } = getGlyphCellCoords(state.selectedCP);
+        ctx.strokeStyle = '#e94560';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x * SCALE + 1, y * SCALE + 1, CELL * SCALE - 2, CELL * SCALE - 2);
+      }
+    }
+
+    // ── Grid click ────────────────────────────────────────────────
+    document.getElementById('grid-canvas').addEventListener('click', (e) => {
+      if (state.activePage === null) return;
+      const canvas = e.currentTarget;
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const col = Math.floor(mx / (CELL * SCALE));
+      const row = Math.floor(my / (CELL * SCALE));
+      if (col < 0 || col > 15 || row < 0 || row > 15) return;
+      const cp = state.activePage * 256 + row * 16 + col;
+      selectGlyph(cp);
+    });
   </script>
 </body>
 </html>
