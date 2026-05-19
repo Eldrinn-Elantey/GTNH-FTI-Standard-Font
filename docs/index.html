@@ -527,6 +527,47 @@
       document.getElementById('modal-pixel-editor').classList.add('hidden');
       pixelEditor.scratch = null;
     }
+
+    function getPixelEditorCell(e) {
+      const canvas = document.getElementById('pixel-editor-canvas');
+      const rect = canvas.getBoundingClientRect();
+      const col = Math.floor((e.clientX - rect.left) / 24);
+      const row = Math.floor((e.clientY - rect.top)  / 24);
+      if (col < 0 || col > 15 || row < 0 || row > 15) return null;
+      return { col, row };
+    }
+
+    function paintPixel(col, row) {
+      const ctx = pixelEditor.scratch.getContext('2d');
+      if (pixelEditor.lastValue) {
+        ctx.clearRect(col, row, 1, 1);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(col, row, 1, 1);
+      } else {
+        ctx.clearRect(col, row, 1, 1);
+      }
+      renderPixelEditorCanvas();
+    }
+
+    document.getElementById('pixel-editor-canvas').addEventListener('mousedown', (e) => {
+      if (!pixelEditor.scratch) return;
+      const cell = getPixelEditorCell(e);
+      if (!cell) return;
+      // Determine draw vs erase from the current pixel alpha
+      const px = pixelEditor.scratch.getContext('2d').getImageData(cell.col, cell.row, 1, 1).data;
+      pixelEditor.lastValue = px[3] < 128; // transparent → draw white; white → erase
+      pixelEditor.painting = true;
+      paintPixel(cell.col, cell.row);
+      e.preventDefault();
+    });
+
+    document.getElementById('pixel-editor-canvas').addEventListener('mousemove', (e) => {
+      if (!pixelEditor.painting || !pixelEditor.scratch) return;
+      const cell = getPixelEditorCell(e);
+      if (cell) paintPixel(cell.col, cell.row);
+    });
+
+    document.addEventListener('mouseup', () => { pixelEditor.painting = false; });
   </script>
 
   <!-- Pixel editor modal -->
