@@ -88,7 +88,7 @@
     <input type="file" id="input-bin" accept=".bin">
     <button class="btn" onclick="document.getElementById('input-png').click()">🖼 Load PNG pages</button>
     <input type="file" id="input-png" accept=".png" multiple>
-    <button class="btn btn-primary" id="btn-download" disabled onclick="downloadBin()">💾 Download .bin</button>
+    <button class="btn btn-primary" id="btn-download" disabled onclick="openSaveModal()">💾 Save</button>
   </div>
 
   <!-- Page selector -->
@@ -444,6 +444,84 @@
       const { left, right } = parseGlyphByte(origByte);
       setSliders(left, right);
       renderPreview(state.selectedCP, left, right);
+    }
+
+    // ── Save modal ────────────────────────────────────────────────
+    function openSaveModal() {
+      // Populate size diff list
+      const sizeList = document.getElementById('diff-size-list');
+      if (!state.workingData) { sizeList.textContent = 'No file loaded.'; }
+      else {
+        const diffs = [];
+        for (let cp = 0; cp < 65536; cp++) {
+          if (state.workingData[cp] !== state.originalData[cp]) {
+            const orig = parseGlyphByte(state.originalData[cp]);
+            const curr = parseGlyphByte(state.workingData[cp]);
+            const origW = Math.max(0, orig.right - orig.left + 1);
+            const currW = Math.max(0, curr.right - curr.left + 1);
+            let label = '';
+            try { label = ' "' + String.fromCodePoint(cp) + '"'; } catch {}
+            diffs.push('U+' + cp.toString(16).toUpperCase().padStart(4, '0') + label +
+              '  —  ' + origW + ' → ' + currW + ' px');
+          }
+        }
+        sizeList.innerHTML = diffs.length
+          ? diffs.map(d => '<div>' + d + '</div>').join('')
+          : '<span style="color:#555">No size changes</span>';
+      }
+
+      // Populate modified PNG list
+      const pngList = document.getElementById('diff-png-list');
+      if (state.modifiedPages.size === 0) {
+        pngList.innerHTML = '<span style="color:#555">No pixel changes</span>';
+      } else {
+        pngList.innerHTML = [...state.modifiedPages]
+          .sort((a, b) => a - b)
+          .map(idx => {
+            const name = 'unicode_page_' + idx.toString(16).toUpperCase().padStart(2, '0') + '.png';
+            return '<div style="color:#00b4d8">' + name + ' <span style="color:#555">[modified]</span></div>';
+          }).join('');
+      }
+
+      // Build action buttons
+      const actions = document.getElementById('save-modal-actions');
+      actions.innerHTML = '';
+
+      const btnBin = document.createElement('button');
+      btnBin.className = 'btn btn-primary';
+      btnBin.textContent = '💾 Download .bin';
+      btnBin.onclick = downloadBin;
+      actions.appendChild(btnBin);
+
+      [...state.modifiedPages].sort((a, b) => a - b).forEach(idx => {
+        const hex = idx.toString(16).toUpperCase().padStart(2, '0');
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = '🖼 Download PNG [' + hex + ']';
+        btn.onclick = () => downloadPng(idx);
+        actions.appendChild(btn);
+      });
+
+      document.getElementById('modal-save').classList.remove('hidden');
+    }
+
+    function closeSaveModal() {
+      document.getElementById('modal-save').classList.add('hidden');
+    }
+
+    function downloadPng(pageIndex) {
+      const oc = state.pageCanvases.get(pageIndex);
+      if (!oc) return;
+      const hex = pageIndex.toString(16).toUpperCase().padStart(2, '0');
+      oc.convertToBlob({ type: 'image/png' }).then(blob => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'unicode_page_' + hex + '.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(a.href), 100);
+      });
     }
 
     // ── Download ──────────────────────────────────────────────────
