@@ -291,6 +291,131 @@
       const cp = state.activePage * 256 + row * 16 + col;
       selectGlyph(cp);
     });
+
+    // ── Editor ────────────────────────────────────────────────────
+    const PREVIEW_SCALE = 8; // 16px × 8 = 128px preview canvas
+
+    function selectGlyph(cp) {
+      if (!state.workingData) return;
+      state.selectedCP = cp;
+      renderGridOverlay(state.activePage);
+
+      const byte = state.workingData[cp];
+      const { left, right } = parseGlyphByte(byte);
+      setSliders(left, right);
+      renderPreview(cp, left, right);
+
+      const hex = '0x' + cp.toString(16).toUpperCase().padStart(4, '0');
+      document.getElementById('glyph-label').textContent = 'U+' + cp.toString(16).toUpperCase().padStart(4, '0');
+      document.getElementById('glyph-name').textContent  = getCharDisplay(cp);
+
+      document.getElementById('slider-left').disabled  = false;
+      document.getElementById('slider-right').disabled = false;
+      document.getElementById('btn-reset').disabled  = false;
+      document.getElementById('btn-apply').disabled  = false;
+    }
+
+    function getCharDisplay(cp) {
+      try { return '"' + String.fromCodePoint(cp) + '"'; } catch { return '(control)'; }
+    }
+
+    function clearEditor() {
+      document.getElementById('glyph-label').textContent = 'No glyph selected';
+      document.getElementById('glyph-name').textContent  = '';
+      document.getElementById('val-left').textContent  = '—';
+      document.getElementById('val-right').textContent = '—';
+      document.getElementById('info-byte').textContent  = '—';
+      document.getElementById('info-width').textContent = '—';
+      document.getElementById('slider-left').disabled  = true;
+      document.getElementById('slider-right').disabled = true;
+      document.getElementById('btn-reset').disabled  = true;
+      document.getElementById('btn-apply').disabled  = true;
+      const previewCtx = document.getElementById('preview-canvas').getContext('2d');
+      previewCtx.clearRect(0, 0, 128, 128);
+      document.getElementById('bound-left').style.left  = '-9999px';
+      document.getElementById('bound-right').style.left = '-9999px';
+    }
+
+    function setSliders(left, right) {
+      document.getElementById('slider-left').value  = left;
+      document.getElementById('slider-right').value = right;
+      document.getElementById('val-left').textContent  = left;
+      document.getElementById('val-right').textContent = right;
+      updateByteInfo(left, right);
+      updateBoundLines(left, right);
+    }
+
+    function updateByteInfo(left, right) {
+      const byte = encodeGlyphByte(left, right);
+      document.getElementById('info-byte').textContent  = '0x' + byte.toString(16).toUpperCase().padStart(2, '0');
+      document.getElementById('info-width').textContent = Math.max(0, right - left) + 'px';
+    }
+
+    function updateBoundLines(left, right) {
+      const px = PREVIEW_SCALE; // pixels per source pixel
+      document.getElementById('bound-left').style.left  = (left  * px) + 'px';
+      document.getElementById('bound-right').style.left = (right * px) + 'px';
+    }
+
+    function renderPreview(cp, left, right) {
+      const pageIndex = cp >> 8;
+      const bitmap = state.pages.get(pageIndex);
+      const canvas = document.getElementById('preview-canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, 128, 128);
+      if (bitmap) {
+        const { x, y } = getGlyphCellCoords(cp);
+        ctx.drawImage(bitmap, x, y, 16, 16, 0, 0, 128, 128);
+      }
+      updateBoundLines(left, right);
+      updateByteInfo(left, right);
+    }
+
+    // ── Slider listeners ──────────────────────────────────────────
+    document.getElementById('slider-left').addEventListener('input', (e) => {
+      const left  = parseInt(e.target.value);
+      const right = parseInt(document.getElementById('slider-right').value);
+      document.getElementById('val-left').textContent = left;
+      updateBoundLines(left, right);
+      updateByteInfo(left, right);
+    });
+
+    document.getElementById('slider-right').addEventListener('input', (e) => {
+      const right = parseInt(e.target.value);
+      const left  = parseInt(document.getElementById('slider-left').value);
+      document.getElementById('val-right').textContent = right;
+      updateBoundLines(left, right);
+      updateByteInfo(left, right);
+    });
+
+    // ── Apply / Reset ─────────────────────────────────────────────
+    function applyGlyph() {
+      if (state.selectedCP === null || !state.workingData) return;
+      const left  = parseInt(document.getElementById('slider-left').value);
+      const right = parseInt(document.getElementById('slider-right').value);
+      const newByte = encodeGlyphByte(left, right);
+      const oldByte = state.workingData[state.selectedCP];
+      if (newByte !== oldByte) {
+        const wasModified = oldByte !== state.originalData[state.selectedCP];
+        state.workingData[state.selectedCP] = newByte;
+        const isModified  = newByte !== state.originalData[state.selectedCP];
+        if (!wasModified && isModified)  state.modifiedCount++;
+        if (wasModified  && !isModified) state.modifiedCount--;
+        updateStatusChanges();
+      }
+    }
+
+    function resetGlyph() {
+      if (state.selectedCP === null || !state.workingData) return;
+      const origByte = state.originalData[state.selectedCP];
+      const wasDiff  = state.workingData[state.selectedCP] !== origByte;
+      state.workingData[state.selectedCP] = origByte;
+      if (wasDiff) { state.modifiedCount--; updateStatusChanges(); }
+      const { left, right } = parseGlyphByte(origByte);
+      setSliders(left, right);
+      renderPreview(state.selectedCP, left, right);
+    }
   </script>
 </body>
 </html>
