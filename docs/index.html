@@ -305,7 +305,6 @@
       setSliders(left, right);
       renderPreview(cp, left, right);
 
-      const hex = '0x' + cp.toString(16).toUpperCase().padStart(4, '0');
       document.getElementById('glyph-label').textContent = 'U+' + cp.toString(16).toUpperCase().padStart(4, '0');
       document.getElementById('glyph-name').textContent  = getCharDisplay(cp);
 
