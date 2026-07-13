@@ -6,6 +6,9 @@ on:
       version:
         description: 'Version number in SemVer format (x.y.z), without v prefix'
         required: true
+      pack_game_version:
+        description: 'Optional GTNH version list (SemVer values separated by ;)'
+        required: false
   pull_request:
     types: [closed]
     branches: [main]
@@ -54,16 +57,30 @@ jobs:
       - name: Sync pack.mcmeta with release version
         if: env.RELEASE == 'true'
         shell: bash
+        env:
+          INPUT_PACK_GAME_VERSION: ${{ github.event.inputs.pack_game_version }}
         run: |
           set -euo pipefail
 
           PACK_GAME_VERSION="$(jq -r '.gtnh_resource_pack_updater.pack_game_version' pack.mcmeta)"
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "$INPUT_PACK_GAME_VERSION" ]]; then
+            PACK_GAME_VERSION="$INPUT_PACK_GAME_VERSION"
+          fi
+          PACK_GAME_VERSION="$(echo "$PACK_GAME_VERSION" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+          semver_seg='([0-9]+|[Xx])'
+          semver_list_regex="^${semver_seg}\.${semver_seg}\.${semver_seg}([[:space:]]*;[[:space:]]*${semver_seg}\.${semver_seg}\.${semver_seg})*$"
+          if [[ ! "$PACK_GAME_VERSION" =~ $semver_list_regex ]]; then
+            echo "❌ pack_game_version '$PACK_GAME_VERSION' должен быть списком SemVer через ';' (пример: 2.8.0;2.8.1 или 2.9.X)."
+            exit 1
+          fi
 
           jq \
             --arg version "${VERSION}" \
             --arg packGameVersion "${PACK_GAME_VERSION}" \
             '
             .gtnh_resource_pack_updater.pack_version = $version
+            | .gtnh_resource_pack_updater.pack_game_version = $packGameVersion
             | .pack.description |= if test("§bv[0-9]+\\.[0-9]+\\.[0-9]+")
                 then sub("§bv[0-9]+\\.[0-9]+\\.[0-9]+"; "§bv" + $version)
                 else .
