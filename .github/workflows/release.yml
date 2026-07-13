@@ -1,13 +1,18 @@
 name: Release ResourcePack
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number in SemVer format (x.y.z), without v prefix'
+        required: true
   pull_request:
     types: [closed]
     branches: [main]
 
 jobs:
   release:
-    if: github.event.pull_request.merged == true
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     permissions:
@@ -16,26 +21,38 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
 
-      - name: Get version from PR title
+      - name: Determine release version
         shell: bash
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
           set -euo pipefail
 
-          TITLE="$(echo "$PR_TITLE" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-          VERSION="${TITLE#v}"
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            VERSION="$INPUT_VERSION"
+          else
+            TITLE="$(echo "$PR_TITLE" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+            VERSION="${TITLE#v}"
+          fi
 
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+              echo "Заголовок PR не содержит версию (x.y.z) — релиз пропущен."
+              exit 0
+            fi
             echo "❌ Неверный формат версии: '$VERSION'"
-            echo "Заголовок PR должен быть в формате: v1.2.3 или 1.2.3"
             exit 1
           fi
 
+          echo "RELEASE=true" >> "$GITHUB_ENV"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Sync pack.mcmeta with release version
+        if: env.RELEASE == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -58,16 +75,18 @@ jobs:
           cat pack.mcmeta
 
       - name: Create zip archive
+        if: env.RELEASE == 'true'
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP_NAME="GTNH-FTI-Standard-Font-v${VERSION}.zip"
+          ZIP_NAME="GTNH-FTI-Standard-Font-${VERSION}.zip"
           echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
 
           zip -r "$ZIP_NAME" assets pack.mcmeta pack.png
 
       - name: Generate release JSON
+        if: env.RELEASE == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -85,6 +104,7 @@ jobs:
           cat gtnh-pack-update.json
 
       - name: Generate changelog
+        if: env.RELEASE == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -98,12 +118,13 @@ jobs:
           cat RELEASE.md
 
       - name: Create GitHub Release
+        if: env.RELEASE == 'true'
         uses: softprops/action-gh-release@v2.5.0
         with:
-          tag_name: "v${{ env.VERSION }}"
-          name: "v${{ env.VERSION }}"
+          tag_name: "${{ env.VERSION }}"
+          name: "${{ env.VERSION }}"
           body_path: RELEASE.md
-          target_commitish: "${{ github.event.pull_request.merge_commit_sha }}"
+          target_commitish: "${{ github.event.pull_request.merge_commit_sha || github.sha }}"
           files: |
             ${{ env.ZIP_NAME }}
             gtnh-pack-update.json
