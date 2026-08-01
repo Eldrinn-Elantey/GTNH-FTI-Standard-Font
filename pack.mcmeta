@@ -1,13 +1,13 @@
 {
   "pack": {
     "pack_format": 1,
-    "description": "§6GTNH §bStandard Font §6By FTI §bv1.1.1"
+    "description": "§6GTNH §bStandard Font §6By FTI §bv1.1.4"
   },
   "gtnh_resource_pack_updater": {
     "schema": 1,
     "pack_name": "GTNH FTI Standard Font",
-    "pack_version": "1.1.2",
-    "pack_game_version": "2.8.4",
+    "pack_version": "1.1.4",
+    "pack_game_version": "2.8.4;2.9.X",
     "source": {
       "type": "github_releases",
       "owner": "Eldrinn-Elantey",
